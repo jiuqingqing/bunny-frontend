@@ -216,3 +216,89 @@ body {
 .input-area button:hover {
   background-color: #06ad56;
 }
+/* 模态框样式 */
+.modal {
+  border: none;
+  border-radius: 16px;
+  padding: 20px;
+  width: 90%;
+  max-width: 500px;
+  background: white;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+}
+.modal::backdrop {
+  background: rgba(0,0,0,0.5);
+}
+.modal-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.modal-content h3 {
+  margin: 0 0 8px 0;
+  font-size: 1.4rem;
+}
+.modal-content label {
+  font-weight: 500;
+  margin-bottom: -4px;
+}
+.modal-content input, .modal-content textarea {
+  padding: 8px 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+}
+.modal-content textarea {
+  resize: vertical;
+}
+.modal-buttons {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+.modal-buttons button {
+  padding: 6px 16px;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  background: #07c160;
+  color: white;
+}
+.modal-buttons button:last-child {
+  background: #ccc;
+  color: #333;
+}
+
+/* token 信息 */
+.token-info {
+  font-size: 11px;
+  color: #888;
+  text-align: right;
+  margin-top: 4px;
+  margin-right: 8px;
+}
+
+/* 会话列表按钮 */
+.session-actions {
+  display: flex;
+  gap: 4px;
+}
+.edit-persona-btn, .delete-session-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  opacity: 0.6;
+  padding: 2px;
+}
+.edit-persona-btn:hover, .delete-session-btn:hover {
+  opacity: 1;
+}
+.session-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
