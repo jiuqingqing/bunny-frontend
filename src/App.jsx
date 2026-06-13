@@ -1,56 +1,81 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import './App.css';
 
+// ！重要：改成你的 Render 后端地址
+const API_BASE_URL = 'https://bunny-backend-1nmg.onrender.com';
+
 function App() {
-  // 模拟会话数据
   const [sessions, setSessions] = useState([
-    { id: 1, name: '小兔乖乖', messages: [{ id: 1, role: 'assistant', content: '你好呀！今天想聊什么？' }] },
-    { id: 2, name: '深夜灵感', messages: [] },
+    { id: 1, name: '默认会话', messages: [] }
   ]);
   const [currentSessionId, setCurrentSessionId] = useState(1);
   const [inputValue, setInputValue] = useState('');
-  const [selectedModel, setSelectedModel] = useState('claude');
+  const [selectedModel, setSelectedModel] = useState('deepseek');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
-  // 获取当前会话的消息
   const currentSession = sessions.find(s => s.id === currentSessionId);
   const messages = currentSession?.messages || [];
 
-  // 发送消息（模拟AI回复）
-  const handleSend = () => {
-    if (!inputValue.trim()) return;
-    // 添加用户消息
+  useEffect(() => {
+    const container = document.querySelector('.messages-container');
+    if (container) container.scrollTop = container.scrollHeight;
+  }, [messages]);
+
+  const handleSend = async () => {
+    if (!inputValue.trim() || isLoading) return;
     const userMsg = { id: Date.now(), role: 'user', content: inputValue };
-    const updatedSessions = sessions.map(s => {
-      if (s.id === currentSessionId) {
-        return { ...s, messages: [...s.messages, userMsg] };
-      }
-      return s;
-    });
-    // 模拟AI回复（延迟0.5秒）
-    const aiReply = { id: Date.now() + 1, role: 'assistant', content: '这是模拟回复，等你连接后端后就会变成真实的AI回答啦！' };
-    setTimeout(() => {
-      setSessions(prev =>
-        prev.map(s => {
-          if (s.id === currentSessionId) {
-            return { ...s, messages: [...s.messages, aiReply] };
-          }
-          return s;
-        })
-      );
-    }, 500);
-    setSessions(updatedSessions);
+    
+    setSessions(prev =>
+      prev.map(s =>
+        s.id === currentSessionId
+          ? { ...s, messages: [...s.messages, userMsg] }
+          : s
+      )
+    );
     setInputValue('');
+    setIsLoading(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: currentSessionId,
+          message: userMsg.content,
+          model: selectedModel
+        })
+      });
+      const data = await response.json();
+      const aiMsg = { id: Date.now() + 1, role: 'assistant', content: data.reply };
+      setSessions(prev =>
+        prev.map(s =>
+          s.id === currentSessionId
+            ? { ...s, messages: [...s.messages, aiMsg] }
+            : s
+        )
+      );
+    } catch (error) {
+      console.error('请求失败:', error);
+      const errorMsg = { id: Date.now() + 1, role: 'assistant', content: '网络错误，请检查后端是否正常运行。' };
+      setSessions(prev =>
+        prev.map(s =>
+          s.id === currentSessionId
+            ? { ...s, messages: [...s.messages, errorMsg] }
+            : s
+        )
+      );
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // 新建会话
   const newSession = () => {
     const newId = Date.now();
     setSessions([...sessions, { id: newId, name: '新对话', messages: [] }]);
     setCurrentSessionId(newId);
   };
 
-  // 删除会话
   const deleteSession = (id) => {
     if (sessions.length === 1) return;
     const newSessions = sessions.filter(s => s.id !== id);
@@ -58,7 +83,6 @@ function App() {
     if (currentSessionId === id) setCurrentSessionId(newSessions[0].id);
   };
 
-  // 重命名会话（简单弹窗）
   const renameSession = (id) => {
     const newName = prompt('输入新名称');
     if (newName) {
@@ -68,7 +92,6 @@ function App() {
 
   return (
     <div className="app">
-      {/* 侧边栏 */}
       <div className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
           <button className="new-chat-btn" onClick={newSession}>+ 新建会话</button>
@@ -91,7 +114,6 @@ function App() {
         </div>
       </div>
 
-      {/* 主聊天区域 */}
       <div className="chat-area">
         {!sidebarOpen && (
           <button className="open-sidebar-btn" onClick={() => setSidebarOpen(true)}>☰</button>
@@ -99,9 +121,9 @@ function App() {
         <div className="chat-header">
           <h2>{currentSession?.name}</h2>
           <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
-            <option value="claude">Claude (主模型)</option>
-            <option value="deepseek">DeepSeek (备选)</option>
-            <option value="gpt">GPT (模拟)</option>
+            <option value="deepseek">DeepSeek (推荐)</option>
+            <option value="claude">Claude (需配置)</option>
+            <option value="gpt">GPT (需配置)</option>
           </select>
         </div>
         <div className="messages-container">
@@ -110,6 +132,11 @@ function App() {
               <div className="bubble">{msg.content}</div>
             </div>
           ))}
+          {isLoading && (
+            <div className="message assistant">
+              <div className="bubble thinking">思考中...</div>
+            </div>
+          )}
         </div>
         <div className="input-area">
           <input
@@ -118,8 +145,9 @@ function App() {
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="输入消息..."
+            disabled={isLoading}
           />
-          <button onClick={handleSend}>发送</button>
+          <button onClick={handleSend} disabled={isLoading}>发送</button>
         </div>
       </div>
     </div>
