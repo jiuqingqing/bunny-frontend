@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
 
-const API_BASE_URL = 'https://bunny-backend-1nmg.onrender.com';
+const API_BASE_URL = 'http://118.25.137.69:3001';
 
 function App() {
   const [sessions, setSessions] = useState([]);
