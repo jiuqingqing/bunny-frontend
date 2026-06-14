@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
 
-const API_BASE_URL = 'https://api.fanfanchat.xyz';
+const API_BASE_URL = 'https://api.fanfanchat.xyz';  // 替换成你的后端地址
 
 function App() {
   const [sessions, setSessions] = useState([]);
@@ -13,16 +13,58 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastTokenUsage, setLastTokenUsage] = useState(0);
 
+  // 全局设置
+  const [globalSettings, setGlobalSettings] = useState({
+    system_prompt: '',
+    temperature: 0.7,
+    max_tokens: 2000
+  });
+  const [showSettings, setShowSettings] = useState(false);
+  const [tempSettings, setTempSettings] = useState(null);
+
   // 模态框引用
   const newSessionDialogRef = useRef(null);
   const editPersonaDialogRef = useRef(null);
+  const settingsDialogRef = useRef(null);
   const [editingSessionId, setEditingSessionId] = useState(null);
   const [editName, setEditName] = useState('');
   const [editPersona, setEditPersona] = useState('');
-
-  // 新建会话模态框表单
   const [newSessionName, setNewSessionName] = useState('');
   const [newSessionPersona, setNewSessionPersona] = useState('');
+
+  // 加载全局设置
+  const loadGlobalSettings = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/settings`);
+      const data = await res.json();
+      setGlobalSettings({
+        system_prompt: data.system_prompt || '',
+        temperature: data.temperature ?? 0.7,
+        max_tokens: data.max_tokens ?? 2000
+      });
+    } catch (err) {
+      console.error('加载设置失败:', err);
+    }
+  };
+
+  // 保存全局设置
+  const saveGlobalSettings = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/settings`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tempSettings)
+      });
+      if (res.ok) {
+        setGlobalSettings(tempSettings);
+        setShowSettings(false);
+      } else {
+        console.error('保存失败');
+      }
+    } catch (err) {
+      console.error('保存设置失败:', err);
+    }
+  };
 
   // 加载会话列表
   const loadSessions = async () => {
@@ -38,7 +80,7 @@ function App() {
     }
   };
 
-  // 加载某个会话的消息
+  // 加载消息
   const loadMessages = async (sessionId) => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/messages/${sessionId}`);
@@ -50,13 +92,12 @@ function App() {
   };
 
   useEffect(() => {
+    loadGlobalSettings();
     loadSessions();
   }, []);
 
   useEffect(() => {
-    if (currentSessionId) {
-      loadMessages(currentSessionId);
-    }
+    if (currentSessionId) loadMessages(currentSessionId);
   }, [currentSessionId]);
 
   useEffect(() => {
@@ -64,7 +105,7 @@ function App() {
     if (container) container.scrollTop = container.scrollHeight;
   }, [messages]);
 
-  // 新建会话（弹出模态框）
+  // 新建会话模态框
   const openNewSessionModal = () => {
     setNewSessionName('');
     setNewSessionPersona('');
@@ -90,7 +131,7 @@ function App() {
     }
   };
 
-  // 编辑会话人设（重命名 + 修改人设）
+  // 编辑会话人设
   const openEditPersonaModal = (session) => {
     setEditingSessionId(session.id);
     setEditName(session.name);
@@ -111,35 +152,26 @@ function App() {
       });
       const updated = await res.json();
       setSessions(sessions.map(s => s.id === updated.id ? updated : s));
-      if (currentSessionId === updated.id) {
-        // 刷新当前会话的消息（人设改变不会影响历史，但后续对话会生效）
-        await loadMessages(currentSessionId);
-      }
+      if (currentSessionId === updated.id) await loadMessages(currentSessionId);
       editPersonaDialogRef.current?.close();
     } catch (err) {
       console.error('更新会话失败:', err);
     }
   };
 
-  // 删除会话
   const deleteSession = async (id) => {
-    if (sessions.length === 1) {
-      alert('至少保留一个会话');
-      return;
-    }
+    if (sessions.length === 1) { alert('至少保留一个会话'); return; }
     try {
       await fetch(`${API_BASE_URL}/api/sessions/${id}`, { method: 'DELETE' });
       const newSessions = sessions.filter(s => s.id !== id);
       setSessions(newSessions);
-      if (currentSessionId === id) {
-        setCurrentSessionId(newSessions[0].id);
-      }
+      if (currentSessionId === id) setCurrentSessionId(newSessions[0].id);
     } catch (err) {
       console.error('删除失败:', err);
     }
   };
 
-  // 发送消息
+  // 发送消息（带上温度和长度参数）
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return;
     const userMsgText = inputValue;
@@ -154,14 +186,16 @@ function App() {
         body: JSON.stringify({
           sessionId: currentSessionId,
           message: userMsgText,
-          model: selectedModel
+          model: selectedModel,
+          temperature: globalSettings.temperature,
+          max_tokens: globalSettings.max_tokens
         })
       });
       const data = await response.json();
       if (response.ok) {
         await loadMessages(currentSessionId);
         if (data.token_usage) setLastTokenUsage(data.token_usage);
-        loadSessions(); // 刷新会话列表（更新时间）
+        loadSessions(); // 更新会话列表时间
       } else {
         console.error('发送失败:', data.error);
       }
@@ -173,8 +207,7 @@ function App() {
   };
 
   const currentSession = sessions.find(s => s.id === currentSessionId);
-
-  return (
+    return (
     <div className="app">
       {/* 侧边栏 */}
       <div className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
@@ -191,19 +224,8 @@ function App() {
             >
               <span className="session-name">{session.name}</span>
               <div className="session-actions">
-                <button
-                  onClick={(e) => { e.stopPropagation(); openEditPersonaModal(session); }}
-                  title="编辑人设"
-                  className="edit-persona-btn"
-                >
-                  ⚙️
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }}
-                  className="delete-session-btn"
-                >
-                  🗑️
-                </button>
+                <button onClick={(e) => { e.stopPropagation(); openEditPersonaModal(session); }} title="编辑人设">⚙️</button>
+                <button onClick={(e) => { e.stopPropagation(); deleteSession(session.id); }}>🗑️</button>
               </div>
             </div>
           ))}
@@ -217,11 +239,14 @@ function App() {
         )}
         <div className="chat-header">
           <h2>{currentSession?.name || '对话'}</h2>
-          <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
-            <option value="deepseek">DeepSeek</option>
-            <option value="claude">Claude (需配置)</option>
-            <option value="gpt">GPT (需配置)</option>
-          </select>
+          <div className="header-actions">
+            <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
+              <option value="deepseek">DeepSeek</option>
+              <option value="claude">Claude (需配置)</option>
+              <option value="gpt">GPT (需配置)</option>
+            </select>
+            <button className="settings-btn" onClick={() => { setTempSettings(globalSettings); setShowSettings(true); }}>⚙️</button>
+          </div>
         </div>
         <div className="messages-container">
           {messages.map((msg, idx) => (
@@ -256,19 +281,9 @@ function App() {
         <div className="modal-content">
           <h3>新建会话</h3>
           <label>会话名称</label>
-          <input
-            type="text"
-            value={newSessionName}
-            onChange={(e) => setNewSessionName(e.target.value)}
-            placeholder="例如: 我的男友"
-          />
+          <input type="text" value={newSessionName} onChange={e => setNewSessionName(e.target.value)} placeholder="例如: 我的男友" />
           <label>角色人设（可选）</label>
-          <textarea
-            rows="4"
-            value={newSessionPersona}
-            onChange={(e) => setNewSessionPersona(e.target.value)}
-            placeholder="例如: 你是我的AI男友，名叫小杰，性格温柔体贴，喜欢叫我宝贝...（留空则使用全局默认）"
-          />
+          <textarea rows="4" value={newSessionPersona} onChange={e => setNewSessionPersona(e.target.value)} placeholder="例如: 你是我的AI男友...（留空则使用全局默认）" />
           <div className="modal-buttons">
             <button onClick={createNewSession}>创建</button>
             <button onClick={() => newSessionDialogRef.current?.close()}>取消</button>
@@ -276,28 +291,40 @@ function App() {
         </div>
       </dialog>
 
-      {/* 编辑会话模态框（重命名 + 修改人设） */}
+      {/* 编辑会话模态框 */}
       <dialog ref={editPersonaDialogRef} className="modal">
         <div className="modal-content">
           <h3>编辑会话</h3>
           <label>会话名称</label>
-          <input
-            type="text"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-          />
-          <label>角色人设</label>
-          <textarea
-            rows="4"
-            value={editPersona}
-            onChange={(e) => setEditPersona(e.target.value)}
-            placeholder="在此设置该会话独有的AI性格，留空则使用全局默认"
-          />
+          <input type="text" value={editName} onChange={e => setEditName(e.target.value)} />
+          <label>角色人设（可留空以使用全局默认）</label>
+          <textarea rows="4" value={editPersona} onChange={e => setEditPersona(e.target.value)} placeholder="在此设置该会话独有的AI性格" />
           <div className="modal-buttons">
             <button onClick={updateSession}>保存</button>
             <button onClick={() => editPersonaDialogRef.current?.close()}>取消</button>
           </div>
         </div>
+      </dialog>
+
+      {/* 全局设置模态框 */}
+      <dialog ref={settingsDialogRef} open={showSettings} className="modal" onClose={() => setShowSettings(false)}>
+        {tempSettings && (
+          <div className="modal-content">
+            <h3>全局 AI 设置</h3>
+            <label>全局人设（影响所有未自定义的会话）</label>
+            <textarea rows="4" value={tempSettings.system_prompt} onChange={e => setTempSettings({ ...tempSettings, system_prompt: e.target.value })} placeholder="例如: 你是一个温柔、贴心的朋友..." />
+            <label>温度（随机性，0~2，越高越有创意）</label>
+            <input type="range" min="0" max="2" step="0.1" value={tempSettings.temperature} onChange={e => setTempSettings({ ...tempSettings, temperature: parseFloat(e.target.value) })} />
+            <input type="number" step="0.1" value={tempSettings.temperature} onChange={e => setTempSettings({ ...tempSettings, temperature: parseFloat(e.target.value) })} style={{ width: '80px', marginLeft: '10px' }} />
+            <label>最大输出长度（tokens，100~8000）</label>
+            <input type="range" min="100" max="8000" step="100" value={tempSettings.max_tokens} onChange={e => setTempSettings({ ...tempSettings, max_tokens: parseInt(e.target.value) })} />
+            <input type="number" min="100" max="8000" step="100" value={tempSettings.max_tokens} onChange={e => setTempSettings({ ...tempSettings, max_tokens: parseInt(e.target.value) })} style={{ width: '100px', marginLeft: '10px' }} />
+            <div className="modal-buttons">
+              <button onClick={saveGlobalSettings}>保存</button>
+              <button onClick={() => setShowSettings(false)}>取消</button>
+            </div>
+          </div>
+        )}
       </dialog>
     </div>
   );
