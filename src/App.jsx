@@ -24,20 +24,32 @@ function App() {
 
   const newSessionDialogRef = useRef(null);
   const editPersonaDialogRef = useRef(null);
-  const settingsDialogRef = useRef(null);
   const [editingSessionId, setEditingSessionId] = useState(null);
   const [editName, setEditName] = useState('');
   const [editPersona, setEditPersona] = useState('');
   const [newSessionName, setNewSessionName] = useState('');
   const [newSessionPersona, setNewSessionPersona] = useState('');
 
-// 自动滚动到底部（无论消息增加还是用户发送后）
-useEffect(() => {
-  const container = document.querySelector('.messages-container');
-  if (container) {
-    container.scrollTop = container.scrollHeight;
-  }
-}, [messages]); // 每次 messages 更新都滚动
+  const messagesEndRef = useRef(null);
+
+  // 滚动到底部的函数
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // 每次 messages 变化时滚动到底部
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  // 响应式侧边栏
+  useEffect(() => {
+    const handleResize = () => {
+      setSidebarOpen(window.innerWidth >= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const loadGlobalSettings = async () => {
     try {
@@ -82,20 +94,15 @@ useEffect(() => {
     }
   };
 
-const loadMessages = async (sessionId) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/api/messages/${sessionId}`);
-    const data = await res.json();
-    setMessages(data);
-    // 强制滚动到底部
-    setTimeout(() => {
-      const container = document.querySelector('.messages-container');
-      if (container) container.scrollTop = container.scrollHeight;
-    }, 20);
-  } catch (err) {
-    console.error('加载消息失败:', err);
-  }
-};
+  const loadMessages = async (sessionId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/messages/${sessionId}`);
+      const data = await res.json();
+      setMessages(data);
+    } catch (err) {
+      console.error('加载消息失败:', err);
+    }
+  };
 
   useEffect(() => {
     loadGlobalSettings();
@@ -105,11 +112,6 @@ const loadMessages = async (sessionId) => {
   useEffect(() => {
     if (currentSessionId) loadMessages(currentSessionId);
   }, [currentSessionId]);
-
-  useEffect(() => {
-    const container = document.querySelector('.messages-container');
-    if (container) container.scrollTop = container.scrollHeight;
-  }, [messages]);
 
   const openNewSessionModal = () => {
     setNewSessionName('');
@@ -175,10 +177,22 @@ const loadMessages = async (sessionId) => {
     }
   };
 
+  // 优化的发送消息函数
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return;
     const userMsgText = inputValue;
     setInputValue('');
+
+    // 乐观更新：立即添加用户消息到本地状态
+    const tempUserMsg = {
+      id: Date.now(),
+      session_id: currentSessionId,
+      role: 'user',
+      content: userMsgText,
+      created_at: new Date().toISOString(),
+      visible: true
+    };
+    setMessages(prev => [...prev, tempUserMsg]);
     setIsLoading(true);
     setLastTokenUsage(0);
 
@@ -196,14 +210,42 @@ const loadMessages = async (sessionId) => {
       });
       const data = await response.json();
       if (response.ok) {
-        await loadMessages(currentSessionId);
+        // 添加 AI 回复消息到本地状态
+        const aiMsg = {
+          id: Date.now() + 1,
+          session_id: currentSessionId,
+          role: 'assistant',
+          content: data.reply,
+          created_at: new Date().toISOString(),
+          visible: true
+        };
+        setMessages(prev => [...prev, aiMsg]);
         if (data.token_usage) setLastTokenUsage(data.token_usage);
+        // 更新会话列表的更新时间（可选，为了排序）
         loadSessions();
       } else {
-        console.error('发送失败:', data.error);
+        // 如果后端返回错误，显示错误消息
+        const errorMsg = {
+          id: Date.now() + 1,
+          session_id: currentSessionId,
+          role: 'assistant',
+          content: `❌ 错误：${data.error || '未知错误'}`,
+          created_at: new Date().toISOString(),
+          visible: true
+        };
+        setMessages(prev => [...prev, errorMsg]);
       }
     } catch (error) {
       console.error('网络错误:', error);
+      const errorMsg = {
+        id: Date.now() + 1,
+        session_id: currentSessionId,
+        role: 'assistant',
+        content: '❌ 网络错误，请检查后端是否正常运行。',
+        created_at: new Date().toISOString(),
+        visible: true
+      };
+      setMessages(prev => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
     }
@@ -213,7 +255,7 @@ const loadMessages = async (sessionId) => {
 
   return (
     <div className="app">
-      {/* 遮罩层（手机侧边栏打开时） */}
+      {/* 遮罩层 */}
       {sidebarOpen && window.innerWidth < 768 && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
       
       {/* 侧边栏 */}
@@ -268,6 +310,7 @@ const loadMessages = async (sessionId) => {
               <div className="bubble thinking">思考中...</div>
             </div>
           )}
+          <div ref={messagesEndRef} />
         </div>
 
         <div className="input-area">
@@ -283,7 +326,7 @@ const loadMessages = async (sessionId) => {
         </div>
       </main>
 
-      {/* 模态框：新建会话 */}
+      {/* 新建会话模态框 */}
       <dialog ref={newSessionDialogRef} className="modal">
         <div className="modal-content">
           <h3>新建会话</h3>
@@ -298,7 +341,7 @@ const loadMessages = async (sessionId) => {
         </div>
       </dialog>
 
-      {/* 模态框：编辑会话 */}
+      {/* 编辑会话模态框 */}
       <dialog ref={editPersonaDialogRef} className="modal">
         <div className="modal-content">
           <h3>编辑会话</h3>
