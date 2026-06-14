@@ -302,3 +302,21 @@ body {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+/* 设置按钮 */
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.settings-btn {
+  background: none;
+  border: none;
+  font-size: 1.4rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 20px;
+  transition: background 0.2s;
+}
+.settings-btn:hover {
+  background: #e0e0e0;
+}
