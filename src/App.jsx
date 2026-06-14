@@ -31,14 +31,13 @@ function App() {
   const [newSessionName, setNewSessionName] = useState('');
   const [newSessionPersona, setNewSessionPersona] = useState('');
 
-  // 响应式：监听窗口宽度变化
-  useEffect(() => {
-    const handleResize = () => {
-      setSidebarOpen(window.innerWidth >= 768);
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+// 自动滚动到底部（无论消息增加还是用户发送后）
+useEffect(() => {
+  const container = document.querySelector('.messages-container');
+  if (container) {
+    container.scrollTop = container.scrollHeight;
+  }
+}, [messages]); // 每次 messages 更新都滚动
 
   const loadGlobalSettings = async () => {
     try {
@@ -83,15 +82,20 @@ function App() {
     }
   };
 
-  const loadMessages = async (sessionId) => {
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/messages/${sessionId}`);
-      const data = await res.json();
-      setMessages(data);
-    } catch (err) {
-      console.error('加载消息失败:', err);
-    }
-  };
+const loadMessages = async (sessionId) => {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/messages/${sessionId}`);
+    const data = await res.json();
+    setMessages(data);
+    // 强制滚动到底部
+    setTimeout(() => {
+      const container = document.querySelector('.messages-container');
+      if (container) container.scrollTop = container.scrollHeight;
+    }, 20);
+  } catch (err) {
+    console.error('加载消息失败:', err);
+  }
+};
 
   useEffect(() => {
     loadGlobalSettings();
