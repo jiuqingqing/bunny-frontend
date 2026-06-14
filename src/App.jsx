@@ -13,11 +13,11 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastTokenUsage, setLastTokenUsage] = useState(0);
 
-  // 全局设置
   const [globalSettings, setGlobalSettings] = useState({
     system_prompt: '',
     temperature: 0.7,
-    max_tokens: 2000
+    max_tokens: 2000,
+    world_book: ''
   });
   const [showSettings, setShowSettings] = useState(false);
   const [tempSettings, setTempSettings] = useState(null);
@@ -31,18 +31,14 @@ function App() {
   const [newSessionPersona, setNewSessionPersona] = useState('');
 
   const messagesEndRef = useRef(null);
-
-  // 滚动到底部的函数
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  // 每次 messages 变化时滚动到底部
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // 响应式侧边栏
   useEffect(() => {
     const handleResize = () => {
       setSidebarOpen(window.innerWidth >= 768);
@@ -58,7 +54,8 @@ function App() {
       setGlobalSettings({
         system_prompt: data.system_prompt || '',
         temperature: data.temperature ?? 0.7,
-        max_tokens: data.max_tokens ?? 2000
+        max_tokens: data.max_tokens ?? 2000,
+        world_book: data.world_book || ''
       });
     } catch (err) {
       console.error('加载设置失败:', err);
@@ -177,13 +174,11 @@ function App() {
     }
   };
 
-  // 优化的发送消息函数
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return;
     const userMsgText = inputValue;
     setInputValue('');
 
-    // 乐观更新：立即添加用户消息到本地状态
     const tempUserMsg = {
       id: Date.now(),
       session_id: currentSessionId,
@@ -210,7 +205,6 @@ function App() {
       });
       const data = await response.json();
       if (response.ok) {
-        // 添加 AI 回复消息到本地状态
         const aiMsg = {
           id: Date.now() + 1,
           session_id: currentSessionId,
@@ -221,10 +215,8 @@ function App() {
         };
         setMessages(prev => [...prev, aiMsg]);
         if (data.token_usage) setLastTokenUsage(data.token_usage);
-        // 更新会话列表的更新时间（可选，为了排序）
         loadSessions();
       } else {
-        // 如果后端返回错误，显示错误消息
         const errorMsg = {
           id: Date.now() + 1,
           session_id: currentSessionId,
@@ -236,7 +228,6 @@ function App() {
         setMessages(prev => [...prev, errorMsg]);
       }
     } catch (error) {
-      console.error('网络错误:', error);
       const errorMsg = {
         id: Date.now() + 1,
         session_id: currentSessionId,
@@ -255,10 +246,8 @@ function App() {
 
   return (
     <div className="app">
-      {/* 遮罩层 */}
       {sidebarOpen && window.innerWidth < 768 && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
       
-      {/* 侧边栏 */}
       <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
           <button className="new-chat-btn" onClick={openNewSessionModal}>+ 新建会话</button>
@@ -281,7 +270,6 @@ function App() {
         </div>
       </aside>
 
-      {/* 主聊天区域 */}
       <main className="chat-area">
         <header className="chat-header">
           <button className="menu-btn" onClick={() => setSidebarOpen(true)}>☰</button>
@@ -326,7 +314,6 @@ function App() {
         </div>
       </main>
 
-      {/* 新建会话模态框 */}
       <dialog ref={newSessionDialogRef} className="modal">
         <div className="modal-content">
           <h3>新建会话</h3>
@@ -341,7 +328,6 @@ function App() {
         </div>
       </dialog>
 
-      {/* 编辑会话模态框 */}
       <dialog ref={editPersonaDialogRef} className="modal">
         <div className="modal-content">
           <h3>编辑会话</h3>
@@ -356,11 +342,12 @@ function App() {
         </div>
       </dialog>
 
-      {/* 全局设置模态框 */}
       {showSettings && (
         <dialog open className="modal" onClose={() => setShowSettings(false)}>
           <div className="modal-content">
             <h3>全局 AI 设置</h3>
+            <label>世界书（场景记忆/世界观设定）</label>
+            <textarea rows="4" value={tempSettings.world_book} onChange={e => setTempSettings({ ...tempSettings, world_book: e.target.value })} placeholder="例如：这是一个魔法世界，龙与骑士共存。主角是一位勇敢的冒险者..." />
             <label>全局人设</label>
             <textarea rows="4" value={tempSettings.system_prompt} onChange={e => setTempSettings({ ...tempSettings, system_prompt: e.target.value })} placeholder="例如: 你是一个温柔、贴心的朋友..." />
             <label>温度（随机性，0~2）</label>
