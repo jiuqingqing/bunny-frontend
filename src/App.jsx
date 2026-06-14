@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
 
-const API_BASE_URL = 'https://api.fanfanchat.xyz';  // 替换成你的后端地址
+const API_BASE_URL = 'https://api.fanfanchat.xyz';
 
 function App() {
   const [sessions, setSessions] = useState([]);
@@ -9,7 +9,7 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [inputValue, setInputValue] = useState('');
   const [selectedModel, setSelectedModel] = useState('deepseek');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 768);
   const [isLoading, setIsLoading] = useState(false);
   const [lastTokenUsage, setLastTokenUsage] = useState(0);
 
@@ -22,7 +22,6 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [tempSettings, setTempSettings] = useState(null);
 
-  // 模态框引用
   const newSessionDialogRef = useRef(null);
   const editPersonaDialogRef = useRef(null);
   const settingsDialogRef = useRef(null);
@@ -32,7 +31,15 @@ function App() {
   const [newSessionName, setNewSessionName] = useState('');
   const [newSessionPersona, setNewSessionPersona] = useState('');
 
-  // 加载全局设置
+  // 响应式：监听窗口宽度变化
+  useEffect(() => {
+    const handleResize = () => {
+      setSidebarOpen(window.innerWidth >= 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   const loadGlobalSettings = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/settings`);
@@ -47,7 +54,6 @@ function App() {
     }
   };
 
-  // 保存全局设置
   const saveGlobalSettings = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/settings`, {
@@ -58,15 +64,12 @@ function App() {
       if (res.ok) {
         setGlobalSettings(tempSettings);
         setShowSettings(false);
-      } else {
-        console.error('保存失败');
       }
     } catch (err) {
       console.error('保存设置失败:', err);
     }
   };
 
-  // 加载会话列表
   const loadSessions = async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/sessions`);
@@ -80,7 +83,6 @@ function App() {
     }
   };
 
-  // 加载消息
   const loadMessages = async (sessionId) => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/messages/${sessionId}`);
@@ -105,7 +107,6 @@ function App() {
     if (container) container.scrollTop = container.scrollHeight;
   }, [messages]);
 
-  // 新建会话模态框
   const openNewSessionModal = () => {
     setNewSessionName('');
     setNewSessionPersona('');
@@ -131,7 +132,6 @@ function App() {
     }
   };
 
-  // 编辑会话人设
   const openEditPersonaModal = (session) => {
     setEditingSessionId(session.id);
     setEditName(session.name);
@@ -171,7 +171,6 @@ function App() {
     }
   };
 
-  // 发送消息（带上温度和长度参数）
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return;
     const userMsgText = inputValue;
@@ -195,7 +194,7 @@ function App() {
       if (response.ok) {
         await loadMessages(currentSessionId);
         if (data.token_usage) setLastTokenUsage(data.token_usage);
-        loadSessions(); // 更新会话列表时间
+        loadSessions();
       } else {
         console.error('发送失败:', data.error);
       }
@@ -207,13 +206,17 @@ function App() {
   };
 
   const currentSession = sessions.find(s => s.id === currentSessionId);
-    return (
+
+  return (
     <div className="app">
+      {/* 遮罩层（手机侧边栏打开时） */}
+      {sidebarOpen && window.innerWidth < 768 && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
+      
       {/* 侧边栏 */}
-      <div className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
+      <aside className={`sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
         <div className="sidebar-header">
           <button className="new-chat-btn" onClick={openNewSessionModal}>+ 新建会话</button>
-          <button className="toggle-sidebar" onClick={() => setSidebarOpen(false)}>«</button>
+          <button className="close-sidebar" onClick={() => setSidebarOpen(false)}>✕</button>
         </div>
         <div className="sessions-list">
           {sessions.map(session => (
@@ -230,24 +233,23 @@ function App() {
             </div>
           ))}
         </div>
-      </div>
+      </aside>
 
       {/* 主聊天区域 */}
-      <div className="chat-area">
-        {!sidebarOpen && (
-          <button className="open-sidebar-btn" onClick={() => setSidebarOpen(true)}>☰</button>
-        )}
-        <div className="chat-header">
+      <main className="chat-area">
+        <header className="chat-header">
+          <button className="menu-btn" onClick={() => setSidebarOpen(true)}>☰</button>
           <h2>{currentSession?.name || '对话'}</h2>
           <div className="header-actions">
             <select value={selectedModel} onChange={(e) => setSelectedModel(e.target.value)}>
               <option value="deepseek">DeepSeek</option>
-              <option value="claude">Claude (需配置)</option>
-              <option value="gpt">GPT (需配置)</option>
+              <option value="claude">Claude</option>
+              <option value="gpt">GPT</option>
             </select>
             <button className="settings-btn" onClick={() => { setTempSettings(globalSettings); setShowSettings(true); }}>⚙️</button>
           </div>
-        </div>
+        </header>
+
         <div className="messages-container">
           {messages.map((msg, idx) => (
             <div key={msg.id} className={`message ${msg.role === 'user' ? 'user' : 'assistant'}`}>
@@ -263,6 +265,7 @@ function App() {
             </div>
           )}
         </div>
+
         <div className="input-area">
           <input
             type="text"
@@ -274,9 +277,9 @@ function App() {
           />
           <button onClick={handleSend} disabled={isLoading}>发送</button>
         </div>
-      </div>
+      </main>
 
-      {/* 新建会话模态框 */}
+      {/* 模态框：新建会话 */}
       <dialog ref={newSessionDialogRef} className="modal">
         <div className="modal-content">
           <h3>新建会话</h3>
@@ -291,7 +294,7 @@ function App() {
         </div>
       </dialog>
 
-      {/* 编辑会话模态框 */}
+      {/* 模态框：编辑会话 */}
       <dialog ref={editPersonaDialogRef} className="modal">
         <div className="modal-content">
           <h3>编辑会话</h3>
@@ -307,25 +310,29 @@ function App() {
       </dialog>
 
       {/* 全局设置模态框 */}
-      <dialog ref={settingsDialogRef} open={showSettings} className="modal" onClose={() => setShowSettings(false)}>
-        {tempSettings && (
+      {showSettings && (
+        <dialog open className="modal" onClose={() => setShowSettings(false)}>
           <div className="modal-content">
             <h3>全局 AI 设置</h3>
-            <label>全局人设（影响所有未自定义的会话）</label>
+            <label>全局人设</label>
             <textarea rows="4" value={tempSettings.system_prompt} onChange={e => setTempSettings({ ...tempSettings, system_prompt: e.target.value })} placeholder="例如: 你是一个温柔、贴心的朋友..." />
-            <label>温度（随机性，0~2，越高越有创意）</label>
-            <input type="range" min="0" max="2" step="0.1" value={tempSettings.temperature} onChange={e => setTempSettings({ ...tempSettings, temperature: parseFloat(e.target.value) })} />
-            <input type="number" step="0.1" value={tempSettings.temperature} onChange={e => setTempSettings({ ...tempSettings, temperature: parseFloat(e.target.value) })} style={{ width: '80px', marginLeft: '10px' }} />
-            <label>最大输出长度（tokens，100~8000）</label>
-            <input type="range" min="100" max="8000" step="100" value={tempSettings.max_tokens} onChange={e => setTempSettings({ ...tempSettings, max_tokens: parseInt(e.target.value) })} />
-            <input type="number" min="100" max="8000" step="100" value={tempSettings.max_tokens} onChange={e => setTempSettings({ ...tempSettings, max_tokens: parseInt(e.target.value) })} style={{ width: '100px', marginLeft: '10px' }} />
+            <label>温度（随机性，0~2）</label>
+            <div className="slider-group">
+              <input type="range" min="0" max="2" step="0.1" value={tempSettings.temperature} onChange={e => setTempSettings({ ...tempSettings, temperature: parseFloat(e.target.value) })} />
+              <input type="number" step="0.1" value={tempSettings.temperature} onChange={e => setTempSettings({ ...tempSettings, temperature: parseFloat(e.target.value) })} />
+            </div>
+            <label>最大输出长度（tokens）</label>
+            <div className="slider-group">
+              <input type="range" min="100" max="8000" step="100" value={tempSettings.max_tokens} onChange={e => setTempSettings({ ...tempSettings, max_tokens: parseInt(e.target.value) })} />
+              <input type="number" min="100" max="8000" step="100" value={tempSettings.max_tokens} onChange={e => setTempSettings({ ...tempSettings, max_tokens: parseInt(e.target.value) })} />
+            </div>
             <div className="modal-buttons">
               <button onClick={saveGlobalSettings}>保存</button>
               <button onClick={() => setShowSettings(false)}>取消</button>
             </div>
           </div>
-        )}
-      </dialog>
+        </dialog>
+      )}
     </div>
   );
 }
