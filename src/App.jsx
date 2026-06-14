@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import './App.css';
 
-const API_BASE_URL = 'http://118.25.137.69:3001';
+const API_BASE_URL = 'https://api.fanfanchat.xyz';
 
 function App() {
   const [sessions, setSessions] = useState([]);
